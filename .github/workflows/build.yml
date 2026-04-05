@@ -1,0 +1,54 @@
+name: Build Windows Executable
+
+# 触发条件：当 push 代码到 main 分支，或者手动触发（workflow_dispatch）
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest   # 使用 GitHub 提供的 Windows 虚拟机
+
+    steps:
+      # 1. 检出你的代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 安装 Python 3.10
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. 安装 Python 依赖
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # 4. 安装 FFmpeg（用于 FLAC → MP3 转换）
+      #    使用 chocolatey 包管理器（Windows runner 自带）
+      - name: Install FFmpeg
+        run: choco install ffmpeg -y
+
+      # 5. 用 PyInstaller 打包成单个 .exe 文件
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --console ncm2mp3.py
+
+      # 6. 将 ffmpeg.exe 也复制到 dist 目录，方便用户一起使用
+      #    （因为脚本调用 ffmpeg，需要同目录或 PATH 中有 ffmpeg）
+      - name: Copy ffmpeg to dist
+        run: |
+          # 查找 ffmpeg.exe 的安装路径
+          $ffmpegPath = (Get-Command ffmpeg).Source
+          Copy-Item $ffmpegPath -Destination dist\ffmpeg.exe
+
+      # 7. 上传最终的文件夹（包含 .exe 和 ffmpeg.exe）
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncm2mp3-windows
+          path: dist/
